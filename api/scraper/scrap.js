@@ -1,41 +1,34 @@
-import puppeteer from "puppeteer";
+const axios = require('axios');
+const cheerio = require('cheerio');
 
 async function scraperAmazon() {
-    const url = "https://www.amazon.com.br/bestsellers/";
+    try {
+        const { data } = await axios.get('https://www.amazon.com.br/bestsellers');
+        const $ = cheerio.load(data);
 
-    const browser = await puppeteer.launch({ headless: "new" });
-    const page = await browser.newPage();
+        const products = [];
+        $('div.p13n-sc-uncoverable-faceout').slice(0, 3).each((i, elem) => {
+            const name = $(elem).find('.p13n-sc-truncate-desktop-type2').text().trim();
+            const price = $(elem).find('._cDEzb_p13n-sc-price_3mJ9Z').text().trim();
+            const link = 'https://www.amazon.com.br/bestsellers' + $(elem).find('a').attr('href');
 
-    await page.setUserAgent(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
-    );
+            products.push({ rank: i + 1, name, price, link });
+        });
 
-    await page.goto(url, { waitUntil: "networkidle2" });
-    const productSelector = ".p13n-sc-truncate-desktop-type2";
-    await page.waitForSelector(productSelector, { timeout: 20000 });
-
-    const products = await page.evaluate(() => {
-        return Array.from(document.querySelectorAll(".zg-item")).slice(0, 3).map((el) => {
-                const titleElement = el.querySelector(".p13n-sc-truncate-desktop-type2");
-                const priceElement = el.querySelector("._cDEzb_p13n-sc-price_3mJ9Z");
-                const linkElement = el.querySelector("a.a-link-normal");
-
-                return {
-                    title: titleElement ? titleElement.innerText.trim() : "Sem título",
-                    price: priceElement ? priceElement.innerText.trim() : "Sem preço",
-                    link: linkElement ? "https://www.amazon.com.br" + linkElement.getAttribute("href") : "#"
-                };
+        if (products.length === 0) {
+            console.log("Nenhum produto encontrado.");
+        } else {
+            products.forEach((product) => {
+                console.log(`\n#${product.rank}`);
+                console.log(`Nome: ${product.name}`);
+                console.log(`Preço: ${product.price || 'N/A'}`);
+                console.log(`Link: ${product.link}`);
             });
-    });
+        }
 
-    if (products.length === 0) {
-        console.error("Nenhum produto encontrado.");
-    } else {
-        console.log("3 produtos mais vendidos:", products);
+    } catch (error) {
+        console.error("Erro", error.message);
     }
-
-    await browser.close();
-    return products;
 }
 
 scraperAmazon().then((data) => console.log("Dados:", data));
